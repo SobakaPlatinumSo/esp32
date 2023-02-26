@@ -32,10 +32,6 @@ const long interval = 300000;         // Interval at which to publish sensor rea
 
 int i = 0;
 
-float aht_temp;
-float aht_hum;
-String *mes;
-
 void connectToWifi() {
   Serial.println("Connecting to Wi-Fi...");
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
@@ -102,7 +98,6 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
     //Serial.print((char)payload[i]);
     messageTemp += (char)payload[i];
   }
-  mes = &messageTemp;
   // Check if the MQTT message was received on topic test
   if (strcmp(topic, MQTT_SUB_TEST) == 0) {
     Serial.println("TRUE");
@@ -125,6 +120,15 @@ void onMqttMessage(char* topic, char* payload, AsyncMqttClientMessageProperties 
   Serial.println(index);
   Serial.print("  total: ");
   Serial.println(total);
+
+  float aht_temp;
+  
+  if (messageTemp == "Temperature") {
+    sensors_event_t humidity, temp;
+    aht.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
+    aht_temp = temp.temperature;
+    uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(aht_temp).c_str());  
+  }
 }
 
 void onMqttPublish(uint16_t packetId) {
@@ -164,23 +168,13 @@ void setup() {
 }
 
 void loop() {
-      if (*mes == "Temperature") {
-      sensors_event_t humidity, temp;
-      aht.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
-      aht_temp = temp.temperature;
-      aht_hum = humidity.relative_humidity;
-      uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(aht_temp).c_str());
-      uint16_t packetIdPub2 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(aht_hum).c_str());  
-      delay(12000);  
-      return;
-    }
-    sensors_event_t humidity, temp;
-    aht.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
-    Serial.print("Temperature: "); 
-    Serial.print(temp.temperature); 
-    Serial.println(" degrees C");
-    Serial.print("Humidity: "); 
-    Serial.print(humidity.relative_humidity); 
-    Serial.println("% rH");
-    delay(12000);  
+  /*sensors_event_t humidity, temp;
+  aht.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
+  Serial.print("Temperature: "); 
+  Serial.print(temp.temperature); 
+  Serial.println(" degrees C");
+  Serial.print("Humidity: "); 
+  Serial.print(humidity.relative_humidity); 
+  Serial.println("% rH");
+  delay(12000);*/
 }
