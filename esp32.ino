@@ -12,6 +12,8 @@ extern "C"
 }
 #include <AsyncMqttClient.h>
 #include <Adafruit_GrayOLED.h>
+#include "Adafruit_SHT4x.h"
+#include <GyverBME280.h>
 
 
 #define DEBUG_BAUDRATE 115200 // указывается скорость передачи данных
@@ -29,6 +31,10 @@ extern "C"
 
 #define MQTT_SUB_TEST "test" // указывается топик mqtt к которому нужно подключатся
 
+GyverBME280 bme;
+
+Adafruit_SHT4x sht4 = Adafruit_SHT4x();
+
 HardwareSerial S8_serial(S8_UART_PORT); // создается переменная в которой указаны пины для подключения sensair
 
 S8_UART *sensor_S8; // 
@@ -44,6 +50,8 @@ TimerHandle_t wifiReconnectTimer; // таймер подключения к wifi
 
 unsigned long previousMillis = 0; //
 const long interval = 300000; //
+
+String messageTemp;
 
 float Temp() // функция которая получает данные от aht 20 и возвращает полученный показатель температуры
 {
@@ -136,74 +144,12 @@ void onMqttUnsubscribe(uint16_t packetId)
 
 void onMqttMessage(char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total)
 {
-  String messageTemp;
-
   for (int i = 0; i < len; i++)
     {
       Serial.print((char)payload[i]);
       messageTemp += (char)payload[i];
     }
-
-  if (messageTemp == "Temperature")
-    {
-      float temp;
-      temp = Temp();
-
-      while(temp == (-50.00))
-      {
-        temp = Temp();  
-      }
-
-      uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(temp).c_str());   
-
-    }
-
-  if (messageTemp == "Humidity")
-    {
-      float hum;
-      hum = Hum();
-
-      while(hum == (-50.00))
-      {
-        hum = Hum();  
-      }      
-
-      uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(hum).c_str());   
-
-    }
-
-    if (messageTemp == "co2")
-    {
-        sensor.co2 = sensor_S8->get_co2();
-        printf("CO2 value = %d ppm\n", sensor.co2);
-
-        uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(sensor.co2).c_str());
-    }
-
-  if (messageTemp == "Condition")
-    {/*
-      float hum;
-      float temp;
-      hum = Hum();
-      temp = Temp();*/
-
-      sensor.co2 = sensor_S8->get_co2();
-      printf("CO2 value = %d ppm\n", sensor.co2);
-      
-/*      while(temp == (-50.00))
-      {
-        temp = Temp();  
-      }
-
-      uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(hum).c_str());
-      uint16_t packetIdPub2 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(temp).c_str());*/
-      uint16_t packetIdPub3 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(sensor.co2).c_str());
-    }
-
-   if (strcmp(topic, MQTT_SUB_TEST) == 0)
-    {
-      Serial.println("TEST");
-    }
+  sendMqttMessage();
 }
 
 void onMqttPublish(uint16_t packetId)
@@ -213,22 +159,111 @@ void onMqttPublish(uint16_t packetId)
   Serial.println(packetId);
 }
 
+void sendMqttMessage(){
+  if (messageTemp == "Temperature")
+    {
+      sensors_event_t humidity, temp;
+  
+      uint32_t timestamp = millis();
+      sht4.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
+      timestamp = millis() - timestamp;
+
+      uint16_t packetIdPub2 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(temp.temperature).c_str());
+    }
+
+  if (messageTemp == "Humidity")
+    {
+      sensors_event_t humidity, temp;
+  
+      uint32_t timestamp = millis();
+      sht4.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
+      timestamp = millis() - timestamp;
+
+      uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(humidity.relative_humidity).c_str());
+    }
+
+  if (messageTemp == "co2")
+    {
+        sensor.co2 = sensor_S8->get_co2();
+        printf("CO2 value = %d ppm\n", sensor.co2);
+
+        uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(sensor.co2).c_str());
+    }
+  if (messageTemp == "Pressure")
+    {
+      uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(bme.readPressure()).c_str());
+    }
+
+  if (messageTemp == "Condition")
+    {
+
+      sensors_event_t humidity, temp;
+  
+      uint32_t timestamp = millis();
+      sht4.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
+      timestamp = millis() - timestamp;
+
+      sensor.co2 = sensor_S8->get_co2();
+      printf("CO2 value = %d ppm\n", sensor.co2);
+
+      uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(bme.readPressure()).c_str());
+      uint16_t packetIdPub2 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(humidity.relative_humidity).c_str());
+      uint16_t packetIdPub3 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(temp.temperature).c_str());
+      uint16_t packetIdPub4 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(sensor.co2).c_str());
+    }
+}
+
 void setup()
 {
   Serial.begin(115200);
   Serial.println();
-/*
-  for (int i = 0; aht.begin() != true; ++i)
-  {
-    if (i >= 100)
-    {
-      Serial.println("Could not find AHT! Press Reset!");
-      return;
-    }
+
+  if (!bme.begin(0x76)) Serial.println("bmp 280 not found");
+
+  Serial.println("Adafruit SHT4x test");
+  if (! sht4.begin()) {
+    Serial.println("Couldn't find SHT4x");
+    while (1) delay(1);
   }
 
-  Serial.println("Adafruit AHT10/AHT20 demo!");  
-*/
+  sht4.setPrecision(SHT4X_HIGH_PRECISION);
+  switch (sht4.getPrecision()) {
+     case SHT4X_HIGH_PRECISION: 
+       Serial.println("High precision");
+       break;
+     case SHT4X_MED_PRECISION: 
+       Serial.println("Med precision");
+       break;
+     case SHT4X_LOW_PRECISION: 
+       Serial.println("Low precision");
+       break;
+  }
+
+  sht4.setHeater(SHT4X_NO_HEATER);
+  switch (sht4.getHeater()) {
+     case SHT4X_NO_HEATER: 
+       Serial.println("No heater");
+       break;
+     case SHT4X_HIGH_HEATER_1S: 
+       Serial.println("High heat for 1 second");
+       break;
+     case SHT4X_HIGH_HEATER_100MS: 
+       Serial.println("High heat for 0.1 second");
+       break;
+     case SHT4X_MED_HEATER_1S: 
+       Serial.println("Medium heat for 1 second");
+       break;
+     case SHT4X_MED_HEATER_100MS: 
+       Serial.println("Medium heat for 0.1 second");
+       break;
+     case SHT4X_LOW_HEATER_1S: 
+       Serial.println("Low heat for 1 second");
+       break;
+     case SHT4X_LOW_HEATER_100MS: 
+       Serial.println("Low heat for 0.1 second");
+       break;
+  }
+  
   S8_serial.begin(S8_BAUDRATE);
   sensor_S8 = new S8_UART(S8_serial);
 
