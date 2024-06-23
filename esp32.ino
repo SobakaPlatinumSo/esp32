@@ -144,54 +144,48 @@ void onMqttUnsubscribe(uint16_t packetId)
 
 void onMqttMessage(char *topic, char *payload, AsyncMqttClientMessageProperties properties, size_t len, size_t index, size_t total)
 {
+  String messageTemp;
+
   for (int i = 0; i < len; i++)
     {
       Serial.print((char)payload[i]);
       messageTemp += (char)payload[i];
     }
-  sendMqttMessage();
-}
 
-void onMqttPublish(uint16_t packetId)
-{
-  Serial.println("Publish acknowledged.");
-  Serial.print("  packetId: ");
-  Serial.println(packetId);
-}
-
-void sendMqttMessage(){
   if (messageTemp == "Temperature")
     {
-      sensors_event_t humidity, temp;
-  
-      uint32_t timestamp = millis();
-      sht4.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
-      timestamp = millis() - timestamp;
+      float temp;
+      temp = Temp();
 
-      uint16_t packetIdPub2 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(temp.temperature).c_str());
+      while(temp == (-50.00))
+      {
+        temp = Temp();  
+      }
+
+      uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(temp).c_str());   
+
     }
 
   if (messageTemp == "Humidity")
     {
-      sensors_event_t humidity, temp;
-  
-      uint32_t timestamp = millis();
-      sht4.getEvent(&humidity, &temp);// populate temp and humidity objects with fresh data
-      timestamp = millis() - timestamp;
+      float hum;
+      hum = Hum();
 
-      uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(humidity.relative_humidity).c_str());
+      while(hum == (-50.00))
+      {
+        hum = Hum();  
+      }      
+
+      uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(hum).c_str());   
+
     }
 
-  if (messageTemp == "co2")
+    if (messageTemp == "co2")
     {
         sensor.co2 = sensor_S8->get_co2();
         printf("CO2 value = %d ppm\n", sensor.co2);
 
         uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(sensor.co2).c_str());
-    }
-  if (messageTemp == "Pressure")
-    {
-      uint16_t packetIdPub1 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(bme.readPressure()).c_str());
     }
 
   if (messageTemp == "Condition")
@@ -211,6 +205,22 @@ void sendMqttMessage(){
       uint16_t packetIdPub3 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(temp.temperature).c_str());
       uint16_t packetIdPub4 = mqttClient.publish(MQTT_SUB_TEST, 1, true, String(sensor.co2).c_str());
     }
+
+   if (strcmp(topic, MQTT_SUB_TEST) == 0)
+    {
+      Serial.println("TEST");
+    }
+}
+
+void onMqttPublish(uint16_t packetId)
+{
+  Serial.println("Publish acknowledged.");
+  Serial.print("  packetId: ");
+  Serial.println(packetId);
+}
+
+void sendMqttMessage(){
+  
 }
 
 void setup()
